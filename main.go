@@ -15,7 +15,8 @@ type Word struct {
 	MainWord           *string `gorm:"unique;not null"`
 	BaseLanguageID     uint    `gorm:"not null"` // Cambia el nombre aquí
 	TranslateWord      *string `gorm:"null"`
-	LearningLanguageID uint    `gorm:"null"` // Cambia el nombre aquí
+	LearningLanguageID uint    `gorm:"null"`      // Cambia el nombre aquí
+	Count              int     `gorm:"default:0"` // Campo para contar repeticiones
 }
 
 type Language struct {
@@ -83,13 +84,23 @@ func main() {
 			uniqueWords[word] = true
 		}
 
-		// Guardar palabras únicas en la base de datos si no existen
+		// Guardar palabras únicas en la base de datos o incrementar Count si ya existen
 		for word := range uniqueWords {
-			var count int64
-			db.Model(&Word{}).Where("main_word = ? AND base_language_id = ?", word, req.BaseLanguageID).Count(&count)
-			if count == 0 {
+			var existingWord Word
+			result := db.Where("main_word = ? AND base_language_id = ?", word, req.BaseLanguageID).First(&existingWord)
+
+			if result.RowsAffected == 0 {
+				// Si no existe la palabra, crearla con Count = 1
 				wordToSave := word // Creación de una variable local para evitar problemas de referencia
-				db.Create(&Word{MainWord: &wordToSave, BaseLanguageID: req.BaseLanguageID, LearningLanguageID: req.LearningLanguageID})
+				db.Create(&Word{
+					MainWord:           &wordToSave,
+					BaseLanguageID:     req.BaseLanguageID,
+					LearningLanguageID: req.LearningLanguageID,
+					Count:              1, // Iniciar el conteo en 1
+				})
+			} else {
+				// Si ya existe, incrementar el campo Count
+				db.Model(&existingWord).Update("count", existingWord.Count+1)
 			}
 		}
 
